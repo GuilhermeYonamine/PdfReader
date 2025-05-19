@@ -1,34 +1,41 @@
 import PyPDF2
 import re
 
-with open("Fatura2.pdf", "rb") as arquivo:
+# Abre e lê o PDF
+with open("Fairfax/Fatura2.pdf", "rb") as arquivo:
     pdf = PyPDF2.PdfReader(arquivo)
-    num_paginas = len(pdf.pages)
-    print(f"Número de páginas: {num_paginas}")
-
     texto_completo = ""
     for pagina in pdf.pages:
-        texto_completo += pagina.extract_text()
+        texto_completo += pagina.extract_text() or ""
 
-    # Padrão para encontrar o Prêmio Líquido
-    padrao_premio_liquido = r"Prêmio\s*Líquido.*?R\$\s*([\d.,]+)"
-    match_premio_liquido = re.search(padrao_premio_liquido, texto_completo, re.IGNORECASE | re.DOTALL)
-    
-    if match_premio_liquido:
-        premio_liquido = match_premio_liquido.group(1)
-        print(f"Prêmio Líquido: R$ {premio_liquido}")
+    # Captura o nome do segurado e seu CNPJ
+    match_cnpj_segurado = re.search(
+        r"Nome do Segurado\s+CNPJ\s*\n?(.+?)\s+(\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2})",
+        texto_completo,
+        re.IGNORECASE
+    )
+    if match_cnpj_segurado:
+        nome_segurado = match_cnpj_segurado.group(1).strip()
+        cnpj_segurado = match_cnpj_segurado.group(2)
+        print(f"Nome do Segurado: {nome_segurado}")
+        print(f"CNPJ do Segurado: {cnpj_segurado}")
     else:
-        print("Prêmio Líquido não encontrado.")
+        print("CNPJ do segurado não encontrado.")
 
-    # Extrair outros campos (opcional)
-    cnpj = re.search(r"CNPJ[:\s]*([\d./-]+)", texto_completo, re.IGNORECASE)
-    if cnpj:
-        print(f"CNPJ: {cnpj.group(1)}")
+    # Captura a linha que contém todos os valores
+    match_linha_valores = re.search(
+        r"Importância Segurada.*?\nR\$.*", 
+        texto_completo
+    )
 
-    vencimento = re.search(r"Vencimento[:\s]*([\d/]+)", texto_completo, re.IGNORECASE)
-    if vencimento:
-        print(f"Vencimento: {vencimento.group(1)}")
-
-    # Verificar o texto completo (para depuração)
-    # print("\nTexto completo extraído do PDF:")
-    # print(texto_completo)
+    if match_linha_valores:
+        linha_valores = match_linha_valores.group(0)
+        # Extrai todos os valores monetários da linha
+        valores = re.findall(r"R\$[\s]*([\d.]+,\d{2})", linha_valores)
+        if valores:
+            premio_total = valores[-1]  # Último valor é o Prêmio Total
+            print(f"Prêmio Total: R$ {premio_total}")
+        else:
+            print("Nenhum valor monetário encontrado na linha de valores.")
+    else:
+        print("Linha de valores não encontrada.")
