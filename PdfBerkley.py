@@ -1,47 +1,57 @@
-import PyPDF2 as py
+import PyPDF2
 import re
+import os
 
-with open("Berkley/Fatura.pdf", "rb") as arquivo:
-    pdf = py.PdfReader(arquivo)
-    num_paginas = len(pdf.pages)
-    print(f"Número de páginas: {num_paginas}")
+def extrair_dados_seguro(caminho_arquivo):
+    try:
+        with open(caminho_arquivo, "rb") as arquivo:
+            pdf = PyPDF2.PdfReader(arquivo)
+            texto_completo = "".join([pagina.extract_text() or "" for pagina in pdf.pages])
+            
+            dados = {
+                'Nome do Segurado': None,
+                'Coligada': None,
+                'Ramo': None,
+                'Endosso': None,
+                'Prêmio Líquido': None
+            }
 
-    texto_completo = ""
-    for pagina in pdf.pages:
-        texto_completo += pagina.extract_text()
+            # Padrões ajustados
+            padroes = {
+                'Nome do Segurado': r"Nome:\s*(.*?)\s*CNPJ:",
+                'Coligada': r"Código Corretor.*?Nome Social:\s*([^\n-]+?)\s*(?:\d|-)",
+                'Ramo': r"Ramo\s*.*?-\s*(.*?)\s",
+                'Endosso': r"Endosso\s*Data de emissão\n.*?(\d{6,})\s+\d{2}/\d{2}/\d{4}",
+                'Prêmio Líquido': r"Prêmio Líquido:\s*\(R\$\)\s*([\d.,]+)"
+            }
 
-    # Extração do nome da empresa
-    nome_empresa = re.search(r"Nome:\s*(.*?)\s*CNPJ:", texto_completo)
-    if nome_empresa:
-        nome = nome_empresa.group(1).strip()
-        print(f"Nome do Segurado: {nome}")
-    else:
-        print("Nome da empresa não encontrado")
-# Extração do CNPJ
-    cnpj = re.search(r"CNPJ:\s*([0-9./-]+)", texto_completo)
-    if cnpj:
-        print(f"CNPJ do Segurado: {cnpj.group(1)}")
-    else:
-        print("CNPJ não encontrado")
-    
-    # Extração do prêmio total
-    premio = re.search(r"Prêmio Total:\s*\(R\$\)\s*([0-9,.]+)", texto_completo)
-    if premio:
-        print(f"Prêmio Total: R$ {premio.group(1)}")
-    else:
-        print("Prêmio não encontrado")
+            for campo, padrao in padroes.items():
+                try:
+                    match = re.search(padrao, texto_completo, re.DOTALL)
+                    if match:
+                        valor = match.group(1).strip()
+                        # Tratamentos específicos
+                        if campo == 'Coligada':
+                            valor = re.sub(r'Nome Social:\s*', '', valor)
+                            valor = re.sub(r'\s+', ' ', valor).strip()
+                        dados[campo] = valor
+                except Exception as e:
+                    print(f"Erro no campo {campo}: {str(e)}")
 
-    
-    # Extração das datas de vigência
-    datas = re.findall(r'(?:Vigência|Período de Vigência|Vigencia|VIGÊNCIA)[\s:à\-]*(\d{2}/\d{2}/\d{4})', 
-                      texto_completo, re.IGNORECASE)
+            return dados
 
-    if len(datas) >= 2:
-        print(f"Data de vigência: {datas[1]}")
-    else:
-        # Padrão alternativo para datas no formato "dd/mm/aaaa à dd/mm/aaaa"
-        datas_alternativas = re.findall(r'(\d{2}/\d{2}/\d{4})\s*à\s*(\d{2}/\d{2}/\d{4})', texto_completo)
-        if datas_alternativas:
-            print(f"Segunda data de vigência: {datas_alternativas[0][1]}")
-        else:
-            print("Não foi possível identificar a segunda data de vigência.")
+    except Exception as e:
+        print(f"Erro ao processar {caminho_arquivo}: {str(e)}")
+        return None
+
+# Processamento dos arquivos
+diretorio = "Berkley"
+for arquivo in os.listdir(diretorio):
+    if arquivo.lower().endswith('.pdf'):
+        caminho_completo = os.path.join(diretorio, arquivo)
+        print(f"\nProcessando: {arquivo}")
+        
+        dados = extrair_dados_seguro(caminho_completo)
+        if dados:
+            for chave, valor in dados.items():
+                print(f"{chave}: {valor or 'Não encontrado'}")
